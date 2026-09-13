@@ -24,22 +24,49 @@
 # residual_ratio = sqrt(1-R1), cos_align = |<v1, mean BOS activation>|.
 # Prediction: arm 1 R1 -> 1 and cos_align high; arms 2-4 markedly lower.
 #
+# This job does NOT source jobs/_w2x_header.sh: it loads an fp16 HF model, so it
+# needs neither gptqmodel nor the pinned 3-bit stack, and it must run for users
+# other than jzheng7. Override anything via the environment, e.g.
+#   IFH_STORE=/scratch365/$USER/ifh HF_HOME=$HOME/hf IFH_CONDA_ENV=ifh \
+#     qsub -q <your-gpu-queue> -M you@nd.edu -t 1 jobs/w50_hess_rank1.sh
+#
 #   qsub -t 1 jobs/w50_hess_rank1.sh     # verification arm first
 #   qsub    jobs/w50_hess_rank1.sh       # all four
 #   awk 'FNR==1 && NR!=1 {next} 1' runs/hess_rank1_*.csv > runs/hess_rank1.csv
-source "/store01/yshi4/jzheng7/Instruction-Following-Attention-Head-Sensitive/jobs/_w2x_header.sh" || { echo "header not found"; exit 3; }
+set -e
 export TOKENIZERS_PARALLELISM=false
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export HF_HOME="${HF_HOME:-$HOME/hf}"
+export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
+IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"     # Hessians land here (~820 MB each)
+IFH_MODEL="${IFH_MODEL:-meta-llama/Llama-3.1-8B-Instruct}"
+IFH_CONDA_ENV="${IFH_CONDA_ENV:-IFEval}"
+source ~/.bashrc 2>/dev/null || true
+conda activate "$IFH_CONDA_ENV" 2>/dev/null || echo "[W50] conda activate $IFH_CONDA_ENV failed; using the ambient python"
+# HF token for the gated Llama weights: jobs/hf.env if present, else the
+# ambient HF_TOKEN / the cached huggingface-cli login.
+source jobs/hf.env 2>/dev/null || true
+mkdir -p logs runs "$IFH_STORE"
+
+# Orphan guard: on qdel, timeout, or normal exit kill every child so no python
+# or CUDA process outlives the job holding the card.
+ifh_cleanup () {
+  pkill -TERM -P $$ 2>/dev/null || true
+  sleep 3
+  pkill -KILL -P $$ 2>/dev/null || true
+}
+trap ifh_cleanup TERM INT HUP USR1 USR2 EXIT
+
 T="timeout --signal=TERM --kill-after=120 3h"
-HDIR="$STORE/hessians"     # ~820 MB per down_proj Hessian (14336^2 fp32)
 
 rank1 () {  # $1 tag  $2 targets  $3 calib  $4 data-source  $5.. extra flags
   local tag="$1" targets="$2" calib="$3" src="$4"; shift 4
-  $T python src/hessian_rank1.py --model "$LLAMA" --targets "$targets" \
+  $T python src/hessian_rank1.py --model "$IFH_MODEL" --targets "$targets" \
       --calib "$calib" --data-source "$src" \
-      --hess-dir "$HDIR/llama31-8b-$tag" --out "runs/hess_rank1_$tag.csv" "$@"
+      --hess-dir "$IFH_STORE/hessians/$tag" --out "runs/hess_rank1_$tag.csv" "$@"
 }
 
-case "$SGE_TASK_ID" in
+case "${SGE_TASK_ID:-1}" in
   # 1: the suspected collapse matrix on the frozen calibration corpus.
   1) rank1 l1_calib  "1:down_proj"  c4        calib ;;
   # 2: same matrix, deployment-style text (the IF calibration prompts through
@@ -58,4 +85,4 @@ case "$SGE_TASK_ID" in
   4) rank1 l1_chat   "1:down_proj"  ultrachat deploy ;;
   *) echo "bad task id"; exit 1 ;;
 esac
-echo "[W50] done task $SGE_TASK_ID"
+echo "[W50] done task ${SGE_TASK_ID:-1}"
