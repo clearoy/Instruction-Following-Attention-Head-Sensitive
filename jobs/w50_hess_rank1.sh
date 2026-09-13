@@ -8,6 +8,7 @@
 #$ -notify
 #$ -j y
 #$ -cwd
+#$ -V
 #$ -o logs/
 #$ -N IFH_W50
 #$ -t 1-4
@@ -27,8 +28,11 @@
 # This job does NOT source jobs/_w2x_header.sh: it loads an fp16 HF model, so it
 # needs neither gptqmodel nor the pinned 3-bit stack, and it must run for users
 # other than jzheng7. Override anything via the environment, e.g.
-#   IFH_STORE=/scratch365/$USER/ifh HF_HOME=$HOME/hf IFH_CONDA_ENV=ifh \
+#   IFH_STORE=$HOME/ifh HF_HOME=$HOME/hf IFH_MODULE_LOAD=pytorch/2.9.1 \
 #     qsub -q <your-gpu-queue> -M you@nd.edu -t 1 jobs/w50_hess_rank1.sh
+# The `#$ -V` above is what makes those overrides reach the job: without it SGE
+# starts the job in a fresh environment and every IFH_* variable is silently
+# lost (symptom: "[W50] python: MISSING" because the module was never loaded).
 #
 #   qsub -t 1 jobs/w50_hess_rank1.sh     # verification arm first
 #   qsub    jobs/w50_hess_rank1.sh       # all four
