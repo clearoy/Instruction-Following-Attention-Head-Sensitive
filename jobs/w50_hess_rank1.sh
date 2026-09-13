@@ -11,7 +11,7 @@
 #$ -V
 #$ -o logs/
 #$ -N IFH_W50
-#$ -t 1-4
+#$ -t 1-6
 # W50: is the calibration Hessian of the sink-forming matrix rank one?
 #
 # Theory under test: at Llama-3.1-8B layer-1 down_proj the BOS activation norm
@@ -105,6 +105,14 @@ case "${SGE_TASK_ID:-1}" in
   #    arm 2's short-prompt token budget cannot be the explanation for a lower
   #    R1. Same corpus the W31 calibration arm used.
   4) rank1 l1_chat   "1:down_proj"  ultrachat deploy ;;
+  # 5-6: the arms that actually decide whether BOS dominance is the variable that
+  #      separates a curing calibration set from a non-curing one. Same c4 content
+  #      in both; 5 wraps it in THIS model's chat template (Llama IFEval .644 vs
+  #      .150 for plain c4 -- cures), 6 wraps it in a FOREIGN template (.162 --
+  #      does not cure). Identical dominance across the two would show the cure
+  #      does not run through diluting BOS out of the Hessian.
+  5) rank1 l1_c4chat      "1:down_proj" c4chat      calib ;;
+  6) rank1 l1_c4wrongchat "1:down_proj" c4wrongchat calib ;;
   *) echo "bad task id"; exit 1 ;;
 esac
 echo "[W50] done task ${SGE_TASK_ID:-1}"

@@ -51,6 +51,14 @@ Chance floor for `cos_align` at dim 14336 is 0.0084. All arms have `n_tokens` �
    Hessian — the dominance is unchanged under it. It must act through the channel RESULTS
    already argues for, adding curvature in template-token directions c4 never populates.
 
+   Both corpora tested here are curing arms (instruct = `v2l_calinst` .611, ultrachat =
+   `v2l_calchat` .669, against `v2l_none` .150), so the conclusion stands on curing sets. But
+   it is not yet the cleanest test: `c4chat` (.644) holds the c4 content fixed and changes
+   only whether this model's template tokens are present, and `c4wrongchat` (.162) is the
+   foreign-template arm that does **not** cure. Identical dominance across that pair — same
+   content, same token budget, opposite IFEval outcomes — would settle it. Added as arms 5–6;
+   **not yet run**.
+
 ## Limits
 
 Structure, not causation: the causal link rests on the existing intervention arms
