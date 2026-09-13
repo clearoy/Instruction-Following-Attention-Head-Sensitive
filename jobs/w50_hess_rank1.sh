@@ -42,7 +42,19 @@ IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"     # Hessians land here (~820 MB each
 IFH_MODEL="${IFH_MODEL:-meta-llama/Llama-3.1-8B-Instruct}"
 IFH_CONDA_ENV="${IFH_CONDA_ENV:-IFEval}"
 source ~/.bashrc 2>/dev/null || true
-conda activate "$IFH_CONDA_ENV" 2>/dev/null || echo "[W50] conda activate $IFH_CONDA_ENV failed; using the ambient python"
+# CRC serves python/conda through environment modules, and which ones exist
+# differs per account, so take them from the submitting environment:
+#   IFH_MODULE_LOAD="conda" qsub ...
+source /etc/profile.d/modules.sh 2>/dev/null || true
+if [ -n "${IFH_MODULE_LOAD:-}" ]; then
+  module load $IFH_MODULE_LOAD || echo "[W50] module load $IFH_MODULE_LOAD failed"
+fi
+if [ -n "$IFH_CONDA_ENV" ]; then
+  conda activate "$IFH_CONDA_ENV" 2>/dev/null \
+    || source activate "$IFH_CONDA_ENV" 2>/dev/null \
+    || echo "[W50] could not activate $IFH_CONDA_ENV; using the ambient python"
+fi
+echo "[W50] python: $(command -v python || echo MISSING)"
 # HF token for the gated Llama weights: jobs/hf.env if present, else the
 # ambient HF_TOKEN / the cached huggingface-cli login.
 source jobs/hf.env 2>/dev/null || true
