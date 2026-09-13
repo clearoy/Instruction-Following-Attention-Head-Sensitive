@@ -53,6 +53,7 @@ Scope and caveats, deliberately:
 import argparse
 import csv
 import gc
+import json
 import os
 
 import torch
@@ -108,11 +109,21 @@ class BosProbe:
         return (b / b.norm().clamp(min=1e-12)).float()
 
 
+def get_calib(args, tok) -> list[str]:
+    """c4 and ultrachat are streamed from the Hub, which needs outbound network.
+    Compute nodes that lack it read a jsonl prefetched by --dump-calib on a
+    login node instead; the texts are identical, only the fetch moves."""
+    if args.calib_file:
+        with open(args.calib_file, encoding="utf-8") as f:
+            return [json.loads(l)["text"] for l in f][: args.n_calib]
+    return load_calib(args.calib, tok, args.n_calib, args.seqlen, seed=args.calib_seed)
+
+
 @torch.no_grad()
 def collect(args, targets: dict[int, list[str]]):
     """Walk the layers with the pipeline's own hooks; dump H for the targets."""
     model, tok = load_model(args.model)
-    calib = load_calib(args.calib, tok, args.n_calib, args.seqlen, seed=args.calib_seed)
+    calib = get_calib(args, tok)
     ids0 = tok(calib[0], truncation=True, max_length=args.seqlen)["input_ids"]
     print(f"[rank1] {args.calib}: {len(calib)} samples; "
           f"prompt-0 tokens 0..7: {tok.convert_ids_to_tokens(ids0[:8])}")
@@ -202,17 +213,22 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--model", default=DEFAULT_MODEL)
-    ap.add_argument("--targets", required=True,
-                    help='"1:down_proj" or "1:down_proj;16:down_proj"')
+    ap.add_argument("--targets", help='"1:down_proj" or "1:down_proj;16:down_proj"')
     ap.add_argument("--calib", default="c4",
                     choices=["c4", "instruct", "wikitext", "ultrachat", "c4chat", "c4wrongchat"])
-    ap.add_argument("--data-source", required=True,
+    ap.add_argument("--data-source", default="calib",
                     help="label for the CSV, e.g. calib / deploy")
     ap.add_argument("--n-calib", type=int, default=128)
     ap.add_argument("--seqlen", type=int, default=2048)
     ap.add_argument("--calib-seed", type=int, default=0)
-    ap.add_argument("--hess-dir", required=True, help="where the H .pt files go (large: dim^2 fp32)")
-    ap.add_argument("--out", required=True, help="CSV (appended if it exists)")
+    ap.add_argument("--hess-dir", help="where the H .pt files go (large: dim^2 fp32)")
+    ap.add_argument("--out", help="CSV (appended if it exists)")
+    ap.add_argument("--calib-file",
+                    help="read calibration texts from this jsonl (one {'text': ...} per line) "
+                         "instead of fetching them -- for compute nodes without network")
+    ap.add_argument("--dump-calib",
+                    help="write the calibration texts to this jsonl and exit. Run on a login "
+                         "node (which has network), then pass the file back via --calib-file.")
     ap.add_argument("--eig-device", default="cuda")
     ap.add_argument("--quantize-preceding", action="store_true",
                     help="quantize the layers before the target first, so H is measured on "
@@ -223,6 +239,18 @@ def main():
     ap.add_argument("--percdamp", type=float, default=0.05)
     args = ap.parse_args()
 
+    if args.dump_calib:
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(args.model)   # tokenizer only: no GPU needed
+        texts = load_calib(args.calib, tok, args.n_calib, args.seqlen, seed=args.calib_seed)
+        with open(args.dump_calib, "w", encoding="utf-8") as f:
+            for t in texts:
+                f.write(json.dumps({"text": t}) + "\n")
+        print(f"[rank1] {len(texts)} {args.calib} texts -> {args.dump_calib}")
+        return
+
+    assert args.hess_dir and args.out and args.targets, \
+        "--targets, --hess-dir and --out are required unless --dump-calib"
     targets = parse_targets(args.targets)
     found = collect(args, targets)
 

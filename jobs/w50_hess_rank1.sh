@@ -37,10 +37,13 @@ set -e
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 export HF_HOME="${HF_HOME:-$HOME/hf}"
-export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
+# Compute nodes may have no outbound network. Weights must then be pre-fetched
+# on a login node, and so must the streamed corpora (see IFH_CALIB_DIR below).
+export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
+IFH_CALIB_DIR="${IFH_CALIB_DIR:-data/calib_cache}"
 IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"     # Hessians land here (~820 MB each)
 IFH_MODEL="${IFH_MODEL:-meta-llama/Llama-3.1-8B-Instruct}"
-IFH_CONDA_ENV="${IFH_CONDA_ENV:-IFEval}"
+IFH_CONDA_ENV="${IFH_CONDA_ENV-}"   # empty = module-provided python, no conda
 source ~/.bashrc 2>/dev/null || true
 # CRC serves python/conda through environment modules, and which ones exist
 # differs per account, so take them from the submitting environment:
@@ -73,8 +76,11 @@ T="timeout --signal=TERM --kill-after=120 3h"
 
 rank1 () {  # $1 tag  $2 targets  $3 calib  $4 data-source  $5.. extra flags
   local tag="$1" targets="$2" calib="$3" src="$4"; shift 4
+  # Prefer a prefetched corpus when one is there; the texts are identical.
+  local cf=""
+  [ -f "$IFH_CALIB_DIR/$calib.jsonl" ] && cf="--calib-file $IFH_CALIB_DIR/$calib.jsonl"
   $T python src/hessian_rank1.py --model "$IFH_MODEL" --targets "$targets" \
-      --calib "$calib" --data-source "$src" \
+      --calib "$calib" --data-source "$src" $cf \
       --hess-dir "$IFH_STORE/hessians/$tag" --out "runs/hess_rank1_$tag.csv" "$@"
 }
 
