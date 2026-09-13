@@ -1,0 +1,5 @@
+model,layer,matrix,data_source,calib,n_samples,n_tokens,dim,lambda_1,lambda_2,R1,residual_ratio,cos_align,xnorm_bos,xnorm_rest,xnorm_ratio,quantize_preceding,hess_path
+meta-llama/Llama-3.1-8B-Instruct,16,down_proj,calib,c4,128,53700,14336,5.20047,0.78483,0.820054,0.424201,0.062916,2.117,7.071,0.3,0,/users/xmu2/ifh_store/hessians/l16_calib/H_L16_down_proj.pt
+meta-llama/Llama-3.1-8B-Instruct,1,down_proj,calib,c4,128,53700,14336,1102.52,0.0455823,1.0,5.5e-05,1.0,480.895,0.98,490.46,0,/users/xmu2/ifh_store/hessians/l1_calib/H_L1_down_proj.pt
+meta-llama/Llama-3.1-8B-Instruct,1,down_proj,deploy,ultrachat,128,150119,14336,788.77,0.0470255,1.0,8.6e-05,1.0,480.895,1.374,350.06,0,/users/xmu2/ifh_store/hessians/l1_chat/H_L1_down_proj.pt
+meta-llama/Llama-3.1-8B-Instruct,1,down_proj,deploy,instruct,512,24476,14336,19350.5,0.205362,1.0,1.7e-05,1.0,480.895,11.282,42.63,0,/users/xmu2/ifh_store/hessians/l1_deploy/H_L1_down_proj.pt
