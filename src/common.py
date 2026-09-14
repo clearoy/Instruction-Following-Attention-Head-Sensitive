@@ -48,15 +48,29 @@ def load_model(model_id: str = DEFAULT_MODEL, dtype=torch.bfloat16):
     # act-order permutation. "balanced" splits the weights evenly instead. Set
     # IFH_DEVICE_MAP to override; default stays "auto" so single-GPU behaviour
     # and every existing job are unchanged.
+    # IFH_MAX_MEMORY pins the per-device budget, e.g. "0:13GiB,1:17GiB,cpu:40GiB".
+    # Needed because neither "auto" nor "balanced" leaves GPU 0 room for the
+    # captured calibration activations (~2.7 GB for Qwen-14B) plus the Hessian
+    # and its act-order copy: both placed 20.33 GB of weights on GPU 0 and OOMed
+    # at H[perm][:, perm].
     dm = os.environ.get("IFH_DEVICE_MAP", "auto")
+    kw = {"device_map": dm}
+    mm = os.environ.get("IFH_MAX_MEMORY", "")
+    if mm:
+        kw["max_memory"] = {(int(k) if k.strip().isdigit() else k.strip()): v.strip()
+                            for k, v in (p.split(":", 1) for p in mm.split(","))}
     try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=dtype, device_map=dm
-        )
+        model = AutoModelForCausalLM.from_pretrained(model_id, dtype=dtype, **kw)
     except TypeError:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=dtype, device_map=dm
-        )
+        model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=dtype, **kw)
+    if os.environ.get("IFH_LOG_PLACEMENT"):
+        from collections import Counter
+        c = Counter(str(p.device) for p in model.parameters())
+        gb = Counter()
+        for p_ in model.parameters():
+            gb[str(p_.device)] += p_.numel() * p_.element_size() / 2**30
+        print("[load] placement: " + ", ".join(f"{d} {gb[d]:.1f} GiB ({n} tensors)"
+                                               for d, n in sorted(c.items())), flush=True)
     model.eval()
     return model, tok
 

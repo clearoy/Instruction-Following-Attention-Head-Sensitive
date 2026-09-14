@@ -72,9 +72,17 @@ case "${SGE_TASK_ID:-1}" in
   1) arm "$LLAMA" llama  l_c4      c4 ;;
   2) arm "$LLAMA" llama  l_c4chat  c4chat ;;
   3) arm "$LLAMA" llama  l_dropbos c4     --hess-drop-pos 1 ;;
-  4) arm "$Q14"   q14    q_c4      c4 ;;
-  5) arm "$Q14"   q14    q_c4chat  c4chat ;;
-  6) arm "$Q14"   q14    q_dropbos c4     --hess-drop-pos 1 ;;
+  # Qwen-14B is 29.5 GB of weights against 2 x 22.3 GB. Neither device_map "auto"
+  # nor "balanced" leaves GPU 0 room for the 2.7 GB of captured activations plus
+  # the Hessian, so pin the split: 13 + 17 covers the weights and leaves ~9 GB
+  # free on GPU 0 and ~5 GB on GPU 1. Llama (16 GB) needs none of this.
+  4|5|6) export IFH_MAX_MEMORY="${IFH_MAX_MEMORY:-0:13GiB,1:17GiB,cpu:40GiB}"
+         export IFH_LOG_PLACEMENT=1
+         case "$SGE_TASK_ID" in
+           4) arm "$Q14" q14 q_c4      c4 ;;
+           5) arm "$Q14" q14 q_c4chat  c4chat ;;
+           6) arm "$Q14" q14 q_dropbos c4 --hess-drop-pos 1 ;;
+         esac ;;
   *) echo "bad task id"; exit 1 ;;
 esac
 echo "[W51] done task ${SGE_TASK_ID:-1}"
