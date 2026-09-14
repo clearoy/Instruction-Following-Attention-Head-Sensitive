@@ -137,16 +137,15 @@ Qwen2.5-14B-Instruct, L4 `down_proj`:
 
 ## Existing IFEval reference values
 
-From `runs/`, frozen protocol, 3-bit g128. Not re-measured in W50/W52. End-to-end
-generation scores, so neither calibration- nor deployment-side in the sense above —
-the calibration corpus is what the column names, the score is IFEval over 541 prompts.
+From `runs/`, frozen protocol, 3-bit g128. End-to-end generation scores, so neither
+calibration- nor deployment-side in the sense above — the calibration corpus is what
+the column names, the score is IFEval over 541 prompts. These are the existing
+measurements; W50/W52 did not re-measure them.
 
 | model | fp16 | RTN3 | GPTQ3 c4 | GPTQ3 c4chat | GPTQ3 drop-BOS |
 |---|---|---|---|---|---|
 | Llama-3.1-8B | .768 | .565 | .150 | .644 | .560 |
 | Qwen2.5-14B | .820 | .697 | .412 | .772 | — |
-
-W51 (2 models × {c4, c4chat, drop-BOS}, `jobs/w51_chain_ifeval.sh`) is not yet run.
 
 ---
 

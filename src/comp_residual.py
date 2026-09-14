@@ -1,7 +1,7 @@
 """Does a BOS-dominated calibration geometry make GPTQ overfit the sink token and
 mis-compensate the deployment template tokens?
 
-Mechanism chain under test (W51/W52):
+Mechanism chain under test (W52):
 
     BOS-dominated calibration  ->  BOS-favoured GPTQ compensation
                                ->  large template-token residual
