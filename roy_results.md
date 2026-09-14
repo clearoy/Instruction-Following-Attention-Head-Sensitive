@@ -18,6 +18,10 @@ no-dominance control. `H` collected through `MaskedGPTQ.add_batch`, preceding la
 left in fp16. `R1 = λ₁²/Σλᵢ²`, `residual = √(1−R1)`, `cos_align = |⟨v₁, b⟩|` with `b`
 the normalised mean BOS activation. Chance floor for `cos_align` at dim 14336 = 0.0084.
 
+**All columns are calibration-side.** W50 has no deployment component: `H`, the
+eigenpair, and the BOS/rest norms all come from the calibration corpus named in the
+Arm column.
+
 | Arm | n_tokens | λ₁ | λ₂ | λ₁/λ₂ | R1 | residual | cos_align | \|x_BOS\| | \|x_rest\| | ratio |
 |---|---|---|---|---|---|---|---|---|---|---|
 | L1, c4 | 53700 | 1102.52 | 0.0455823 | 24,188 | 1.000000 | 5.5e-05 | 1.000 | 480.895 | 0.98 | 490.5 |
@@ -46,6 +50,9 @@ H accumulated in float64.
 
 ### Hessian geometry
 
+**All columns are calibration-side**: the spectrum of `H`, and `cos_v1_sink` between
+`v₁` and the mean calibration sink activation.
+
 | model | calib | hessian | λ₁ | λ₂ | trace | R1_trace | λ₁/λ₂ | cos_v1_sink |
 |---|---|---|---|---|---|---|---|---|
 | Llama | c4 | full | 1103 | 0.04553 | 1104 | 0.998211 | 24,213 | 1.000 |
@@ -58,6 +65,12 @@ H accumulated in float64.
 | Qwen | c4chat | sink_removed | 3.046 | 1.826 | 123.2 | 0.024730 | 1.67 | 0.002 |
 
 ### Residuals
+
+**All columns are deployment-side.** Calibration enters only by fixing the regressor:
+`B_λ` is built from `H` (or `H − Σ x_t x_tᵀ`), then evaluated on the deployment `z`.
+`L_*`, `amp_*`, `pred_template` and `cos_pred_template` are all measured over the 64
+IFEval prompts' first 8 positions, split by the deployment-side sink detection. This
+off-distribution evaluation is the step in THEORY_BRIEF_v2 §2.
 
 | model | calib | hessian | L_sink | L_template | L_ratio | amp_sink | amp_template | pred_template | cos_pred_template |
 |---|---|---|---|---|---|---|---|---|---|
@@ -72,6 +85,12 @@ H accumulated in float64.
 
 ### Detected sink positions and norms
 
+Mixed: `sink (calib)`, `|x_sink|` and `|x_template|` are calibration-side;
+`sink (deploy)` and `sink tokens` are deployment-side. The two need not agree — for
+Qwen under c4 they are different tokens, which is why its calibration `|x_sink|` is
+7569 while the same position measures 38 on deployment input. Llama sinks at BOS on
+both sides, so its two figures coincide.
+
 | model | calib | sink (calib) | sink (deploy) | sink tokens | \|x_sink\| calib | \|x_template\| calib |
 |---|---|---|---|---|---|---|
 | Llama | c4 | 0 | 0\|1 | `<\|begin_of_text\|>` | 480.895 | 1.098 |
@@ -83,6 +102,10 @@ Consistency check on the full Hessians, λ₁ = (2/N)·k·κ² from the detected
 Llama predicts 1102.5 against 1102.5 measured; Qwen predicts 269,241 against 269,280.
 
 ### Per-position, deployment window, full Hessian
+
+**Deployment-side**, per position of the deployment window; `sink` marks the
+deployment-side detection. The regressor behind `amp` and `cos` is still the
+calibration Hessian named in the column heading.
 
 Llama-3.1-8B-Instruct, L1 `down_proj`:
 
@@ -114,7 +137,9 @@ Qwen2.5-14B-Instruct, L4 `down_proj`:
 
 ## Existing IFEval reference values
 
-From `runs/`, frozen protocol, 3-bit g128. Not re-measured in W50/W52.
+From `runs/`, frozen protocol, 3-bit g128. Not re-measured in W50/W52. End-to-end
+generation scores, so neither calibration- nor deployment-side in the sense above —
+the calibration corpus is what the column names, the score is IFEval over 541 prompts.
 
 | model | fp16 | RTN3 | GPTQ3 c4 | GPTQ3 c4chat | GPTQ3 drop-BOS |
 |---|---|---|---|---|---|
