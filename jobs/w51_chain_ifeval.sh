@@ -46,7 +46,9 @@
 #   qsub -t 1-3 jobs/w51_chain_ifeval.sh          # Llama only
 #   qsub -t 7-9 jobs/w51_chain_ifeval.sh          # Mistral only
 #   awk 'FNR==1 && NR!=1 {next} 1' runs/scores_w51_*.csv > runs/scores_w51.csv
-source "$(dirname "$0")/_w5x_header.sh" || { echo "header not found"; exit 3; }
+# SGE copies the job script to a spool dir, so $0 is NOT the original
+# path -- locate the header from the submit directory instead.
+source "${SGE_O_WORKDIR:-$PWD}/jobs/_w5x_header.sh" || { echo "header not found"; exit 3; }
 T="timeout --signal=TERM --kill-after=120 23h"
 
 arm () {  # $1 model  $2 model-key  $3 tag  $4 corpus  $5.. extra flags

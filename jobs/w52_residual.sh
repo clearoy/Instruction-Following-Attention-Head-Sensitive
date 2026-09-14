@@ -41,7 +41,9 @@
 #
 #   qsub jobs/w52_residual.sh
 #   awk 'FNR==1 && NR!=1 {next} 1' runs/comp_residual_*.csv > runs/comp_residual.csv
-source "$(dirname "$0")/_w5x_header.sh" || { echo "header not found"; exit 3; }
+# SGE copies the job script to a spool dir, so $0 is NOT the original
+# path -- locate the header from the submit directory instead.
+source "${SGE_O_WORKDIR:-$PWD}/jobs/_w5x_header.sh" || { echo "header not found"; exit 3; }
 T="timeout --signal=TERM --kill-after=120 5h"
 
 resid () {  # $1 model  $2 model-key  $3 target  $4 corpus  $5 tag
