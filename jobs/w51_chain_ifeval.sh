@@ -57,6 +57,10 @@ arm () {  # $1 model  $2 model-key  $3 tag  $4 corpus  $5.. extra flags
   local ckpt="$IFH_STORE/models/$key-w51-$tag"
   local cf; cf="$(calib_file "$corpus" "$key")"
   [ -f "$cf" ] || { echo "[W51] missing prefetched corpus $cf -- dump it on a login node first"; exit 4; }
+  # An arm that dies between quantization and scoring leaves the whole checkpoint
+  # behind, because the rm below only runs on success. Clear any stale copy first
+  # or a couple of failures will exhaust the disk quota.
+  rm -rf "$ckpt"
   $T python src/quantize_protected.py --model "$model" --bits 3 --group-size 128 \
       --protect none --calib "$corpus" --calib-file "$cf" "$@" --out "$ckpt"
   run_ifeval "$ckpt" "w51_$tag"
