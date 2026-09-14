@@ -3,7 +3,7 @@
 #$ -m abe
 #$ -pe smp 8
 #$ -q gpu
-#$ -l gpu_card=1
+#$ -l gpu_card=2
 #$ -l h_rt=24:00:00
 #$ -notify
 #$ -j y
@@ -29,12 +29,14 @@
 # Those used --hess-drop-pos 2 for Llama, which on c4 also drops one ordinary
 # token; this job uses 1, which is the exact BOS removal.
 #
-# NOTE ON QWEN (tasks 4-6): Qwen2.5-14B in bf16 is ~28 GB, so generation does not
-# fit on one 24 GB A10 or RTX 4500. It does not need a bigger card, only more of
-# them: common.load_model uses device_map="auto", which shards across every
-# visible GPU, so two cards give 48 GB and the model fits natively.
-#   qsub -l gpu_card=2 -t 4-6 jobs/w51_chain_ifeval.sh
-# Only the Qwen arms need this; Llama (16 GB) and Mistral (14.5 GB) fit on one.
+# WHY gpu_card=2: on a 24 GB card even the Llama arm OOMs inside GPTQ. The
+# budget is model weights (16 GB) + the 128 captured calibration activations
+# (~2 GB, resident) + the layer-1 down_proj Hessian (822 MB) + the act-order
+# permutation's second copy of it -- and that last allocation is the one that
+# fails. quantize_protected.py was written for 141 GB H200s. device_map="auto"
+# shards across every visible GPU, so two cards give 48 GB and all three models
+# fit; Qwen (28 GB weights) needs them most. On a large-memory card, override
+# with `qsub -l gpu_card=1`.
 #
 # WHY -tc 1 AND NOT -tc 3: each arm materialises a fake-quant checkpoint the size
 # of the model (Llama 16 GB, Qwen 28 GB, Mistral 14.5 GB) and deletes it after
