@@ -11,7 +11,7 @@
 #$ -V
 #$ -o logs/
 #$ -N IFH_W52
-#$ -t 1-6
+#$ -t 1-4
 #$ -tc 3
 # W52: the mechanistic half of the chain -- Hessian geometry and the GPTQ
 # compensation residual at each model's sink-forming matrix, under c4 and under
@@ -30,10 +30,17 @@
 # make the cure a change in the residual calibration geometry rather than a
 # removal of the rank-1 dominance.
 #
-# Sink-forming matrices (RESULTS 9.10n/p): Llama L1 down_proj (BOS, norm 481),
-# Mistral-v0.3 L1 down_proj (BOS, 807), Qwen2.5-14B L4 down_proj -- whose sink is
-# NOT BOS but the first newline at position 2 (70 vs 4-25). comp_residual.py
-# detects the sink position from the calibration norms rather than assuming BOS.
+# Sink-forming matrices (RESULTS 9.10n/p): Llama L1 down_proj (BOS, norm 481) and
+# Qwen2.5-14B L4 down_proj -- whose sink is NOT BOS but the first newline at
+# position 2 (70 vs 4-25). comp_residual.py detects the sink position from the
+# calibration norms rather than assuming BOS.
+#
+# Mistral-7B-v0.3 was dropped after its first run: the sink removal is incomplete
+# there. lambda_1 = (2/N)*k*kappa^2 predicts 2728.8 from the detected sink tokens
+# but 2968.2 is measured, and lambda_1 is still 440.2 after removal (equivalent to
+# 128 tokens of norm 321) -- so Mistral has a second massive-activation token class
+# outside the 8-position window this file inspects. Llama and Qwen match the
+# prediction to within 0.015% and drop to ~0 after removal.
 #
 # Cheap: only layers 0..L are walked, so even Qwen-14B fits on a 24 GB card here
 # (device_map spills the unused tail to host RAM). Unlike W51, which needs the
@@ -65,8 +72,6 @@ case "${SGE_TASK_ID:-1}" in
   2) resid "$LLAMA" llama "1:down_proj" c4chat l_c4chat ;;
   3) resid "$Q14"   q14   "4:down_proj" c4     q_c4 ;;
   4) resid "$Q14"   q14   "4:down_proj" c4chat q_c4chat ;;
-  5) resid "$M7"    m7    "1:down_proj" c4     m_c4 ;;
-  6) resid "$M7"    m7    "1:down_proj" c4chat m_c4chat ;;
   *) echo "bad task id"; exit 1 ;;
 esac
 echo "[W52] done task ${SGE_TASK_ID:-1}"

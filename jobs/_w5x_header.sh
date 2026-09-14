@@ -18,7 +18,6 @@ IFH_CONDA_ENV="${IFH_CONDA_ENV-}"
 
 LLAMA="${IFH_LLAMA:-meta-llama/Llama-3.1-8B-Instruct}"
 Q14="${IFH_Q14:-Qwen/Qwen2.5-14B-Instruct}"
-M7="${IFH_M7:-mistralai/Mistral-7B-Instruct-v0.3}"
 FULL="data/ifeval_input_data.jsonl"
 
 source ~/.bashrc 2>/dev/null || true

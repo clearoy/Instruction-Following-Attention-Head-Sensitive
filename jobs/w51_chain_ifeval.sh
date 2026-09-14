@@ -11,9 +11,9 @@
 #$ -V
 #$ -o logs/
 #$ -N IFH_W51
-#$ -t 1-9
+#$ -t 1-6
 #$ -tc 1
-# W51: the IFEval end of the mechanism chain, three models x three calibration
+# W51: the IFEval end of the mechanism chain, two models x three calibration
 # Hessians. 3-bit g128, protect none, frozen protocol otherwise.
 #
 #   c4       the collapse condition (BOS-dominated calibration geometry)
@@ -25,7 +25,6 @@
 # Reference values already in the repo under the frozen protocol, for comparison:
 #   Llama  fp16 .768  RTN3 .565  c4 .150  c4chat .644  dropbos(pos 2) .560
 #   Q14    fp16 .820  RTN3 .697  c4 .412  c4chat .772  dropbos --
-#   M7v0.3 fp16 .552  RTN3 .420  c4 .468  c4chat --     dropbos --
 # Those used --hess-drop-pos 2 for Llama, which on c4 also drops one ordinary
 # token; this job uses 1, which is the exact BOS removal.
 #
@@ -39,14 +38,14 @@
 # with `qsub -l gpu_card=1`.
 #
 # WHY -tc 1 AND NOT -tc 3: each arm materialises a fake-quant checkpoint the size
-# of the model (Llama 16 GB, Qwen 28 GB, Mistral 14.5 GB) and deletes it after
+# of the model (Llama 16 GB, Qwen 28 GB) and deletes it after
 # scoring. With all three models downloaded (58.5 GB) a 100 GB home has ~34 GB
-# spare, so two concurrent arms is already marginal and three is not possible.
+# spare, so two concurrent arms is already marginal.
 # Raise it at submit time (`qsub -tc 3`) only if IFH_STORE points somewhere with
-# room for three checkpoints at once. W52 has no such limit and ships with -tc 3.
+# room for two checkpoints at once. W52 has no such limit and ships with -tc 3.
 #
 #   qsub -t 1-3 jobs/w51_chain_ifeval.sh          # Llama only
-#   qsub -t 7-9 jobs/w51_chain_ifeval.sh          # Mistral only
+#   qsub -t 4-6 jobs/w51_chain_ifeval.sh          # Qwen only
 #   awk 'FNR==1 && NR!=1 {next} 1' roy_run/scores_w51_*.csv > roy_run/scores_w51.csv
 # SGE copies the job script to a spool dir, so $0 is NOT the original
 # path -- locate the header from the submit directory instead.
@@ -72,9 +71,6 @@ case "${SGE_TASK_ID:-1}" in
   4) arm "$Q14"   q14    q_c4      c4 ;;
   5) arm "$Q14"   q14    q_c4chat  c4chat ;;
   6) arm "$Q14"   q14    q_dropbos c4     --hess-drop-pos 1 ;;
-  7) arm "$M7"    m7     m_c4      c4 ;;
-  8) arm "$M7"    m7     m_c4chat  c4chat ;;
-  9) arm "$M7"    m7     m_dropbos c4     --hess-drop-pos 1 ;;
   *) echo "bad task id"; exit 1 ;;
 esac
 echo "[W51] done task ${SGE_TASK_ID:-1}"
