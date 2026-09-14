@@ -251,6 +251,10 @@ def main():
                     help="disjoint calib replicate (for error bars)")
     ap.add_argument("--calib", choices=["c4", "instruct", "wikitext", "ultrachat", "c4chat", "c4wrongchat"], default="c4",
                     help="calibration corpus (frozen protocol = c4)")
+    ap.add_argument("--calib-file",
+                    help="read the calibration texts from this jsonl instead of fetching them "
+                         "(offline compute nodes; prefetch with hessian_rank1.py --dump-calib). "
+                         "Must match --calib: it is recorded in the protocol, not re-derived.")
     # quantizer family
     ap.add_argument("--quantizer", choices=["gptq", "rtn", "awq"], default="gptq")
     ap.add_argument("--rtn", action="store_true",
@@ -408,7 +412,13 @@ def main():
         return
 
     # ------------------------------------------------------- GPTQ / AWQ
-    calib = load_calib(args.calib, tok, args.n_calib, args.seqlen, seed=args.calib_seed)
+    if args.calib_file:
+        # c4/ultrachat are streamed from the Hub; compute nodes without outbound
+        # network read a jsonl prefetched on a login node instead (identical text).
+        with open(args.calib_file, encoding="utf-8") as f:
+            calib = [json.loads(l)["text"] for l in f][: args.n_calib]
+    else:
+        calib = load_calib(args.calib, tok, args.n_calib, args.seqlen, seed=args.calib_seed)
     print(f"[v2] capturing layer-0 inputs ({len(calib)} {args.calib} samples)")
     inps, kws = capture_layer0_inputs(model, tok, calib, args.seqlen)
     inps_alt, kws_alt = [], []
@@ -516,6 +526,7 @@ def protocol(args, ctx):
             "awq_grid": args.awq_grid if args.quantizer == "awq" else None,
             "scale_excl_mask": args.scale_excl_mask,
             "calib": None if args.quantizer == "rtn" else args.calib,
+            "calib_file": args.calib_file,
             "n_calib": args.n_calib,
             "protect": args.protect, "budget_params": args.budget_params,
             "selected_params": ctx["selected"],
