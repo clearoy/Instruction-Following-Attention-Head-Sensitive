@@ -36,7 +36,7 @@
 #
 #   qsub -t 1 jobs/w50_hess_rank1.sh     # verification arm first
 #   qsub    jobs/w50_hess_rank1.sh       # all four
-#   awk 'FNR==1 && NR!=1 {next} 1' runs/hess_rank1_*.csv > runs/hess_rank1.csv
+#   awk 'FNR==1 && NR!=1 {next} 1' roy_run/hess_rank1_*.csv > roy_run/hess_rank1.csv
 set -e
 export TOKENIZERS_PARALLELISM=false
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
@@ -45,6 +45,7 @@ export HF_HOME="${HF_HOME:-$HOME/hf}"
 # on a login node, and so must the streamed corpora (see IFH_CALIB_DIR below).
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 IFH_CALIB_DIR="${IFH_CALIB_DIR:-data/calib_cache}"
+IFH_OUT="${IFH_OUT:-roy_run}"
 IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"     # Hessians land here (~820 MB each)
 IFH_MODEL="${IFH_MODEL:-meta-llama/Llama-3.1-8B-Instruct}"
 IFH_CONDA_ENV="${IFH_CONDA_ENV-}"   # empty = module-provided python, no conda
@@ -65,7 +66,7 @@ echo "[W50] python: $(command -v python || echo MISSING)"
 # HF token for the gated Llama weights: jobs/hf.env if present, else the
 # ambient HF_TOKEN / the cached huggingface-cli login.
 source jobs/hf.env 2>/dev/null || true
-mkdir -p logs runs "$IFH_STORE"
+mkdir -p logs "$IFH_OUT" "$IFH_STORE"
 
 # Orphan guard: on qdel, timeout, or normal exit kill every child so no python
 # or CUDA process outlives the job holding the card.
@@ -85,7 +86,7 @@ rank1 () {  # $1 tag  $2 targets  $3 calib  $4 data-source  $5.. extra flags
   [ -f "$IFH_CALIB_DIR/$calib.jsonl" ] && cf="--calib-file $IFH_CALIB_DIR/$calib.jsonl"
   $T python src/hessian_rank1.py --model "$IFH_MODEL" --targets "$targets" \
       --calib "$calib" --data-source "$src" $cf \
-      --hess-dir "$IFH_STORE/hessians/$tag" --out "runs/hess_rank1_$tag.csv" "$@"
+      --hess-dir "$IFH_STORE/hessians/$tag" --out "$IFH_OUT/hess_rank1_$tag.csv" "$@"
 }
 
 case "${SGE_TASK_ID:-1}" in

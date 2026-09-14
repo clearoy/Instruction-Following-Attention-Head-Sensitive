@@ -13,6 +13,7 @@ export HF_HOME="${HF_HOME:-$HOME/hf}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
 IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"
 IFH_CALIB_DIR="${IFH_CALIB_DIR:-data/calib_cache}"
+IFH_OUT="${IFH_OUT:-roy_run}"   # this effort's results, kept out of runs/
 IFH_CONDA_ENV="${IFH_CONDA_ENV-}"
 
 LLAMA="${IFH_LLAMA:-meta-llama/Llama-3.1-8B-Instruct}"
@@ -30,7 +31,7 @@ if [ -n "$IFH_CONDA_ENV" ]; then
     || echo "[w5x] could not activate $IFH_CONDA_ENV; using the ambient python"
 fi
 echo "[w5x] python: $(command -v python || echo MISSING)"
-mkdir -p logs runs runs/protocols "$IFH_STORE"
+mkdir -p logs "$IFH_OUT" "$IFH_OUT/protocols" "$IFH_STORE"
 
 ifh_cleanup () {
   pkill -TERM -P $$ 2>/dev/null || true
@@ -52,5 +53,5 @@ calib_file () {  # $1 corpus  $2 model key
 run_ifeval () {   # $1 ckpt-or-hf-id  $2 tag
   ${T:-} python src/diagnose_heads.py ablate --model "$1" --prompts "$FULL" --tag "$2" --batch 16
   ${T:-} python src/score_ifeval.py --responses "runs/$(basename "$1")/$2/responses.jsonl" \
-    --input-data "$FULL" --tag "$2" --scores-csv "runs/scores_$2.csv"
+    --input-data "$FULL" --tag "$2" --scores-csv "$IFH_OUT/scores_$2.csv"
 }

@@ -40,7 +40,7 @@
 # whole model resident for generation.
 #
 #   qsub jobs/w52_residual.sh
-#   awk 'FNR==1 && NR!=1 {next} 1' runs/comp_residual_*.csv > runs/comp_residual.csv
+#   awk 'FNR==1 && NR!=1 {next} 1' roy_run/comp_residual_?_*.csv > roy_run/comp_residual.csv
 # SGE copies the job script to a spool dir, so $0 is NOT the original
 # path -- locate the header from the submit directory instead.
 source "${SGE_O_WORKDIR:-$PWD}/jobs/_w5x_header.sh" || { echo "header not found"; exit 3; }
@@ -57,7 +57,7 @@ resid () {  # $1 model  $2 model-key  $3 target  $4 corpus  $5 tag
   $T python src/comp_residual.py --model "$model" --target "$target" \
       --calib "$corpus" --calib-file "$cf" --deploy "$FULL" \
       --z-cache "$IFH_STORE/zcache_$key.pt" \
-      --out "runs/comp_residual_$tag.csv"
+      --out "$IFH_OUT/comp_residual_$tag.csv"
 }
 
 case "${SGE_TASK_ID:-1}" in

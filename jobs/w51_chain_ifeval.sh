@@ -45,7 +45,7 @@
 #
 #   qsub -t 1-3 jobs/w51_chain_ifeval.sh          # Llama only
 #   qsub -t 7-9 jobs/w51_chain_ifeval.sh          # Mistral only
-#   awk 'FNR==1 && NR!=1 {next} 1' runs/scores_w51_*.csv > runs/scores_w51.csv
+#   awk 'FNR==1 && NR!=1 {next} 1' roy_run/scores_w51_*.csv > roy_run/scores_w51.csv
 # SGE copies the job script to a spool dir, so $0 is NOT the original
 # path -- locate the header from the submit directory instead.
 source "${SGE_O_WORKDIR:-$PWD}/jobs/_w5x_header.sh" || { echo "header not found"; exit 3; }
@@ -59,7 +59,7 @@ arm () {  # $1 model  $2 model-key  $3 tag  $4 corpus  $5.. extra flags
   $T python src/quantize_protected.py --model "$model" --bits 3 --group-size 128 \
       --protect none --calib "$corpus" --calib-file "$cf" "$@" --out "$ckpt"
   run_ifeval "$ckpt" "w51_$tag"
-  cp "$ckpt/PROTECT_PROTOCOL.json" "runs/protocols/$(basename "$ckpt").json" 2>/dev/null || true
+  cp "$ckpt/PROTECT_PROTOCOL.json" "$IFH_OUT/protocols/$(basename "$ckpt").json" 2>/dev/null || true
   rm -rf "$ckpt"          # 16-28 GB each; home quota is 100 GB
 }
 

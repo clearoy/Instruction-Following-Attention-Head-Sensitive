@@ -1,6 +1,6 @@
 # W50 — the calibration Hessian at the sink-forming matrix is rank one
 
-Llama-3.1-8B-Instruct, run 2026-09-13 on CRC. Data: `runs/hess_rank1.csv`.
+Llama-3.1-8B-Instruct, run 2026-09-13 on CRC. Data: `roy_run/hess_rank1.csv`.
 Code: `src/hessian_rank1.py`, `jobs/w50_hess_rank1.sh`.
 
 ## Question
@@ -69,12 +69,12 @@ than re-proves. One model, one matrix, one seed.
 
 ```
 qsub -t 1-4 jobs/w50_hess_rank1.sh
-awk 'FNR==1 && NR!=1 {next} 1' runs/hess_rank1_*.csv > runs/hess_rank1.csv
+awk 'FNR==1 && NR!=1 {next} 1' roy_run/hess_rank1_*.csv > roy_run/hess_rank1.csv
 ```
 
 Offline compute nodes need the streamed corpora prefetched on a login node (`--dump-calib`).
 Control layer 16 chosen from `runs/stats/llama31-8b-pos/stats.csv`: L1's template/ordinary
 norm ratio is 123×, L16's is 0.92×, L0/L31 anomalous.
 
-`runs/hess_rank1.csv` was transcribed from the job output; the saved `H` matrices (~820 MB
+`roy_run/hess_rank1.csv` was transcribed from the job output; the saved `H` matrices (~820 MB
 each) stay on CRC under `~/ifh_store/hessians/`.
