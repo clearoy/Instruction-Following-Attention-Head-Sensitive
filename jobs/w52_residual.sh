@@ -3,7 +3,7 @@
 #$ -m abe
 #$ -pe smp 8
 #$ -q gpu
-#$ -l gpu_card=1
+#$ -l gpu_card=2
 #$ -l h_rt=6:00:00
 #$ -notify
 #$ -j y
@@ -42,9 +42,11 @@
 # outside the 8-position window this file inspects. Llama and Qwen match the
 # prediction to within 0.015% and drop to ~0 after removal.
 #
-# Cheap: only layers 0..L are walked, so even Qwen-14B fits on a 24 GB card here
-# (device_map spills the unused tail to host RAM). Unlike W51, which needs the
-# whole model resident for generation.
+# WHY gpu_card=2: only layers 0..L are walked, but device_map="auto" still loads
+# the whole model, and Qwen-14B's 28 GB does not leave room on a 22 GB card for
+# the float64 Hessian (1.4 GB) plus eigh's workspace (~5.7 GB). Two cards shard
+# the weights and both fit. Llama alone would run on one; override with
+# `qsub -l gpu_card=1` if only the Llama arms are wanted.
 #
 #   qsub jobs/w52_residual.sh
 #   awk 'FNR==1 && NR!=1 {next} 1' $(ls roy_run/comp_residual_*.csv | grep -v tokens) > roy_run/comp_residual.csv
