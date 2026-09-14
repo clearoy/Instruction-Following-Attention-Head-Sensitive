@@ -58,10 +58,15 @@ Three things this file is careful about:
     z window is computed once per model and cached (`--z-cache`); every
     calibration condition for that model loads the same tensor.
 
-  * **"Sink", not "BOS".** For Llama and Mistral the dominant token IS BOS at
-    position 0 (and 1 under the double-BOS pipeline), but Qwen's sink is the
-    first newline at position 2 of layer 4 -- so the dominant position is
-    detected from the calibration norms, not assumed, and recorded.
+  * **"Sink", not "BOS", and detected on BOTH sides.** For Llama and Mistral the
+    dominant token IS BOS, but Qwen's sink is the first newline at position 2 of
+    layer 4 -- so the dominant position is detected from activation norms rather
+    than assumed. It is detected separately for calibration (which builds H^-B)
+    and for deployment (which splits L_sink from L_template), because the two
+    need not agree: raw c4 carries one BOS at position 0, while the chat-formatted
+    deployment prompts carry Llama's double-BOS at positions 0 AND 1. Inheriting
+    the calibration positions would file that second BOS under "template", and
+    L_template would then be reporting BOS.
 
   python src/comp_residual.py --self-test        # no model needed
   python src/comp_residual.py --model meta-llama/Llama-3.1-8B-Instruct \
@@ -82,7 +87,7 @@ from quantize_protected import ATTN, capture_layer0_inputs
 
 P = 8                     # first P positions of each sequence are the template window
 CSV_COLS = ["model", "layer", "matrix", "calib", "hessian", "n_calib_tokens", "dim",
-            "sink_pos", "sink_tokens", "xnorm_sink", "xnorm_template",
+            "sink_pos", "sink_pos_deploy", "sink_tokens", "xnorm_sink", "xnorm_template",
             "lambda_1", "lambda_2", "lam1_over_lam2", "trace",
             "R1_trace", "R1_frob", "cos_v1_sink",
             "L_sink", "L_template", "L_ratio",
@@ -316,7 +321,14 @@ def analyse(args, H, n_tok, Xc, Z, toks, sink, dev):
     Zf = Z.reshape(-1, d).to(dev)                       # [m*P, d]
     pos = torch.arange(P).repeat(m)
     prompt = torch.arange(m).repeat_interleave(P)
-    is_sink = torch.tensor([p in sink for p in pos.tolist()])
+    # The sink must be identified on the DEPLOYMENT side by the same criterion,
+    # not inherited from the calibration positions: c4 is raw text with one BOS
+    # at position 0, while the deployment prompts are chat-formatted and Llama's
+    # double-BOS puts a second one at position 1. Inheriting `sink` would file
+    # that second BOS (norm ~481) under "template" and the template average would
+    # be measuring BOS.
+    sink_dep = detect_sink(Z, args.sink_pos_deploy)
+    is_sink = torch.tensor([p in sink_dep for p in pos.tolist()])
 
     rows, trows = [], []
     for name, Hx in (("full", H), ("sink_removed", H_minus)):
@@ -339,7 +351,8 @@ def analyse(args, H, n_tok, Xc, Z, toks, sink, dev):
             "matrix": args.target.split(":")[1], "calib": args.calib, "hessian": name,
             "n_calib_tokens": n_tok, "dim": d,
             "sink_pos": "|".join(map(str, sink)),
-            "sink_tokens": "|".join(toks[0][p] for p in sink),
+            "sink_pos_deploy": "|".join(map(str, sink_dep)),
+            "sink_tokens": "|".join(toks[0][p] for p in sink_dep),
             "xnorm_sink": round(float(Xc[:, sink].norm(dim=-1).mean()), 3),
             "xnorm_template": round(float(Xc[:, tpl].norm(dim=-1).mean()), 3),
             "lambda_1": f"{float(lam[0]):.6g}", "lambda_2": f"{float(lam[1]):.6g}",
@@ -385,7 +398,8 @@ def main():
     ap.add_argument("--seqlen", type=int, default=2048)
     ap.add_argument("--percdamp", type=float, default=0.05)
     ap.add_argument("--no-actorder", action="store_true")
-    ap.add_argument("--sink-pos", help='force the sink positions, e.g. "0,1" (default: detect)')
+    ap.add_argument("--sink-pos", help='force the calibration sink positions, e.g. "0,1" (default: detect)')
+    ap.add_argument("--sink-pos-deploy", help="force the deployment sink positions (default: detect)")
     ap.add_argument("--out")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--self-test", action="store_true", help="check the invariants; no model needed")
