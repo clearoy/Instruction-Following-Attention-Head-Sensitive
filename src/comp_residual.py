@@ -332,7 +332,15 @@ def analyse(args, H, n_tok, Xc, Z, toks, sink, dev):
 
     rows, trows = [], []
     for name, Hx in (("full", H), ("sink_removed", H_minus)):
-        ev, evec = torch.linalg.eigh(Hx)
+        try:
+            ev, evec = torch.linalg.eigh(Hx)
+        except torch.OutOfMemoryError:
+            # ~18 s on a 13824^2 float64 matrix with a threaded BLAS; far cheaper
+            # than failing the arm.
+            print(f"[resid] eigh OOM on {dev}; retrying on cpu", flush=True)
+            torch.cuda.empty_cache()
+            ev, evec = torch.linalg.eigh(Hx.cpu())
+            ev, evec = ev.to(Hx.device), evec.to(Hx.device)
         lam = ev.flip(0)
         v1 = evec[:, -1]
         r_sq, amp, pred, cosp = residuals(Hx, Zf, args.percdamp, not args.no_actorder)
@@ -410,6 +418,12 @@ def main():
     assert args.target and args.out, "--target and --out are required unless --self-test"
 
     H, n_tok, Xc, Z, toks = collect(args)
+    # collect()'s nested run()/hook closures hold the model in their cells, so the
+    # `del model` inside it does not release anything until that frame exits. Only
+    # here is the memory actually reclaimable -- and the analysis below needs it,
+    # since eigh on a 13824^2 float64 Hessian wants ~9 GB of workspace.
+    gc.collect()
+    torch.cuda.empty_cache()
     sink = detect_sink(Xc, args.sink_pos)
     print(f"[resid] calibration norms by position: "
           f"{[round(float(v), 1) for v in Xc.norm(dim=-1).mean(0)]} -> sink {sink}")
