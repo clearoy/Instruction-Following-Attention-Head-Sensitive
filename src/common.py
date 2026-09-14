@@ -41,13 +41,21 @@ def load_model(model_id: str = DEFAULT_MODEL, dtype=torch.bfloat16):
         return model, tok
     # No output_attentions needed anywhere in the new pipeline -> flash/sdpa OK.
     # transformers 5.x renamed torch_dtype -> dtype; support both.
+    #
+    # device_map="auto" fills GPU 0 to capacity before spilling to GPU 1, which
+    # leaves no room on GPU 0 for the calibration activations and the Hessian:
+    # Qwen-14B on two 22 GB cards packs ~20 GB onto GPU 0 and OOMs at the
+    # act-order permutation. "balanced" splits the weights evenly instead. Set
+    # IFH_DEVICE_MAP to override; default stays "auto" so single-GPU behaviour
+    # and every existing job are unchanged.
+    dm = os.environ.get("IFH_DEVICE_MAP", "auto")
     try:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, dtype=dtype, device_map="auto"
+            model_id, dtype=dtype, device_map=dm
         )
     except TypeError:
         model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=dtype, device_map="auto"
+            model_id, torch_dtype=dtype, device_map=dm
         )
     model.eval()
     return model, tok
