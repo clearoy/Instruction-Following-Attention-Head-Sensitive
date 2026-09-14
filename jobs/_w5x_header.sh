@@ -11,9 +11,6 @@ export TOKENIZERS_PARALLELISM=false
 export PYTORCH_ALLOC_CONF="${PYTORCH_ALLOC_CONF:-expandable_segments:True}"
 export HF_HOME="${HF_HOME:-$HOME/hf}"
 export HF_HUB_OFFLINE="${HF_HUB_OFFLINE:-1}"
-# W52 requests two cards; "auto" would pack GPU 0 full and
-# leave no room for activations or the Hessian (see common.load_model).
-export IFH_DEVICE_MAP="${IFH_DEVICE_MAP:-balanced}"
 IFH_STORE="${IFH_STORE:-$HOME/ifh_store}"
 IFH_CALIB_DIR="${IFH_CALIB_DIR:-data/calib_cache}"
 IFH_OUT="${IFH_OUT:-roy_run}"   # this effort's results, kept out of runs/
@@ -33,8 +30,6 @@ if [ -n "$IFH_CONDA_ENV" ]; then
     || echo "[w5x] could not activate $IFH_CONDA_ENV; using the ambient python"
 fi
 echo "[w5x] python: $(command -v python || echo MISSING)"
-echo "[w5x] CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-unset} device_map=$IFH_DEVICE_MAP"
-nvidia-smi --query-gpu=index,name,memory.total --format=csv,noheader 2>/dev/null | sed "s/^/[w5x] gpu /" || true
 mkdir -p logs "$IFH_OUT" "$IFH_STORE"
 
 ifh_cleanup () {
