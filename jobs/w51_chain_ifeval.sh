@@ -12,6 +12,7 @@
 #$ -o logs/
 #$ -N IFH_W51
 #$ -t 1-9
+#$ -tc 1
 # W51: the IFEval end of the mechanism chain, three models x three calibration
 # Hessians. 3-bit g128, protect none, frozen protocol otherwise.
 #
@@ -33,6 +34,13 @@
 # RTX 4500. Run those three on a >=40 GB card, or they will fall back to CPU
 # offload and take days. Check what is available with:
 #   qstat -f -q '*' | grep '^gpu@' | sort -u
+#
+# WHY -tc 1 AND NOT -tc 3: each arm materialises a fake-quant checkpoint the size
+# of the model (Llama 16 GB, Qwen 28 GB, Mistral 14.5 GB) and deletes it after
+# scoring. With all three models downloaded (58.5 GB) a 100 GB home has ~34 GB
+# spare, so two concurrent arms is already marginal and three is not possible.
+# Raise it at submit time (`qsub -tc 3`) only if IFH_STORE points somewhere with
+# room for three checkpoints at once. W52 has no such limit and ships with -tc 3.
 #
 #   qsub -t 1-3 jobs/w51_chain_ifeval.sh          # Llama only
 #   qsub -t 7-9 jobs/w51_chain_ifeval.sh          # Mistral only

@@ -12,6 +12,7 @@
 #$ -o logs/
 #$ -N IFH_W52
 #$ -t 1-6
+#$ -tc 3
 # W52: the mechanistic half of the chain -- Hessian geometry and the GPTQ
 # compensation residual at each model's sink-forming matrix, under c4 and under
 # chat-template calibration. Each task emits TWO csv rows, `full` and
@@ -47,8 +48,13 @@ resid () {  # $1 model  $2 model-key  $3 target  $4 corpus  $5 tag
   local model="$1" key="$2" target="$3" corpus="$4" tag="$5"
   local cf; cf="$(calib_file "$corpus" "$key")"
   [ -f "$cf" ] || { echo "[W52] missing prefetched corpus $cf -- dump it on a login node first"; exit 4; }
+  # One z-cache per MODEL, shared by that model's calibration conditions, so the
+  # deployment z are identical by inspection and not merely by construction.
+  # Sibling tasks may race to create it; comp_residual.py writes it atomically
+  # and the contents are identical either way (z comes from the unquantized model).
   $T python src/comp_residual.py --model "$model" --target "$target" \
       --calib "$corpus" --calib-file "$cf" --deploy "$FULL" \
+      --z-cache "$IFH_STORE/zcache_$key.pt" \
       --out "runs/comp_residual_$tag.csv"
 }
 
