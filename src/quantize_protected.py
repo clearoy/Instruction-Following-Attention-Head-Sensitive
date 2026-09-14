@@ -187,6 +187,14 @@ def capture_layer0_inputs(model, tok, texts, max_len):
         except RuntimeError:
             pass
     layers[0] = layers[0].mod
+    if os.environ.get("IFH_LOG_PLACEMENT") and kwargs_list:
+        # What the decoder layer is handed matters: a Cache object in here is
+        # reused for every layer and every replay, so it would accumulate.
+        def _d(v):
+            return (f"{tuple(v.shape)}:{v.dtype}" if torch.is_tensor(v)
+                    else type(v).__name__)
+        print("[v2] layer kwargs: "
+              + ", ".join(f"{k}={_d(v)}" for k, v in kwargs_list[0].items()), flush=True)
     return inps, kwargs_list
 
 
@@ -488,8 +496,17 @@ def main():
             for j in range(len(inps_alt)):
                 out = layer(inps_alt[j], **kws_alt[j])
                 inps_alt[j] = out[0] if isinstance(out, tuple) else out
+            mem = ""
+            if os.environ.get("IFH_LOG_PLACEMENT") and torch.cuda.is_available():
+                # Per-device allocation, to tell a fixed overhead from something
+                # that accumulates across layers (an OOM at layer 14 rather than
+                # layer 0 means something is growing, and guessing what has cost
+                # two runs already).
+                mem = "  mem " + " ".join(
+                    f"cuda:{d} {torch.cuda.memory_allocated(d) / 2**30:.1f}G"
+                    for d in range(torch.cuda.device_count()))
             print(f"[v2] layer {li + 1}/{len(layers)} quantized "
-                  f"(protected so far: {ctx['selected'] / 1e6:.1f}M)", flush=True)
+                  f"(protected so far: {ctx['selected'] / 1e6:.1f}M){mem}", flush=True)
 
     nonfinite = sum(int((~torch.isfinite(p)).sum()) for n, p in model.named_parameters()
                     if "layers" in n and p.dim() == 2)
