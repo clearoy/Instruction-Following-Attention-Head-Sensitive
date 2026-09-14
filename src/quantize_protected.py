@@ -166,6 +166,14 @@ def capture_layer0_inputs(model, tok, texts, max_len):
 
         def forward(self, hidden_states, **kw):
             inps.append(hidden_states)
+            # Drop the cache. These kwargs are replayed for all L layers and
+            # twice per layer (Hessian pass, then propagation), and a DynamicCache
+            # is indexed by layer_idx, so every replay appends to it: measured at
+            # +0.44 GB per layer for Qwen-14B (128 samples x ~425 tokens x 8 kv
+            # heads x 128 dims x 2 passes), which OOMs a 22 GB card by layer 14.
+            # Collecting calibration statistics never needs a cache.
+            kw.pop("past_key_values", None)
+            kw["use_cache"] = False
             kwargs_list.append(kw)
             raise RuntimeError("stop")
 
@@ -178,6 +186,8 @@ def capture_layer0_inputs(model, tok, texts, max_len):
                 return getattr(super().__getattr__("mod"), name)
 
     layers = model.model.layers
+    prev_use_cache = getattr(model.config, "use_cache", None)
+    model.config.use_cache = False
     layers[0] = Catcher(layers[0])
     for t in texts:
         ids = tok(t, return_tensors="pt", truncation=True,
@@ -187,6 +197,8 @@ def capture_layer0_inputs(model, tok, texts, max_len):
         except RuntimeError:
             pass
     layers[0] = layers[0].mod
+    if prev_use_cache is not None:
+        model.config.use_cache = prev_use_cache
     if os.environ.get("IFH_LOG_PLACEMENT") and kwargs_list:
         # What the decoder layer is handed matters: a Cache object in here is
         # reused for every layer and every replay, so it would accumulate.
