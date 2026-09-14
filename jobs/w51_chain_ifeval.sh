@@ -29,11 +29,12 @@
 # Those used --hess-drop-pos 2 for Llama, which on c4 also drops one ordinary
 # token; this job uses 1, which is the exact BOS removal.
 #
-# NOTE ON QWEN (tasks 4-6): Qwen2.5-14B in bf16 is ~28 GB and the fake-quant
-# checkpoint is the same size, so generation does NOT fit on a 24 GB A10 or
-# RTX 4500. Run those three on a >=40 GB card, or they will fall back to CPU
-# offload and take days. Check what is available with:
-#   qstat -f -q '*' | grep '^gpu@' | sort -u
+# NOTE ON QWEN (tasks 4-6): Qwen2.5-14B in bf16 is ~28 GB, so generation does not
+# fit on one 24 GB A10 or RTX 4500. It does not need a bigger card, only more of
+# them: common.load_model uses device_map="auto", which shards across every
+# visible GPU, so two cards give 48 GB and the model fits natively.
+#   qsub -l gpu_card=2 -t 4-6 jobs/w51_chain_ifeval.sh
+# Only the Qwen arms need this; Llama (16 GB) and Mistral (14.5 GB) fit on one.
 #
 # WHY -tc 1 AND NOT -tc 3: each arm materialises a fake-quant checkpoint the size
 # of the model (Llama 16 GB, Qwen 28 GB, Mistral 14.5 GB) and deletes it after
